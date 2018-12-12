@@ -71,7 +71,7 @@ class DataProcessor(object):
     @classmethod
     def _read_tsv(cls, input_file, quotechar=None):
         """Reads a tab separated value file."""
-        with open(input_file, "r") as f:
+        with open(input_file, "r", encoding='utf8') as f:
             reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
             lines = []
             for line in reader:
@@ -481,10 +481,10 @@ def main():
     parser.add_argument('--early_stop_loss_threshold',
                         type=float, default=1e-6)
     parser.add_argument('--early_stop_patience',
-                        type=int, default=5)
+                        type=int, default=10)
     parser.add_argument('--log_step',
                         type=int, default=200)
-    parser.add_argument('--checkpoint_path', type=str,
+    parser.add_argument('--resume_path', type=str,
             default=None)
 
     args = parser.parse_args()
@@ -554,6 +554,8 @@ def main():
                                                           output_device=args.local_rank)
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
+    if args.resume_path:
+        model.load_state_dict(torch.load(args.resume_path))
 
     # Prepare optimizer
     if args.fp16:
@@ -717,10 +719,10 @@ def main():
                 writer.write("%s = %s\n" % (key, str(result[key])))
 
     if args.do_evaluate_sample:
-        if not args.checkpoint_path:
-            print("args.checkpoint_path should not be None")
+        if not args.resume_path:
+            print("args.resume_path should not be None")
             exit(-1)
-        model.load_state_dict(torch.load(args.checkpoint_path))
+        model.load_state_dict(torch.load(args.resume_path))
         model.eval()
 
         sent_a = "Two."
@@ -747,12 +749,47 @@ def main():
         print(sent_a, sent_b)
         print(logits)
 
+        sent_a = "A woman."
+        sent_b = "the woman."
+        logits = do_evaluate_sample(model, sent_a, sent_b, tokenizer, args.max_seq_length, device)
+        print(sent_a, sent_b)
+        print(logits)
+
         sent_a = "It's rainy."
         sent_b = "Sunny."
         logits = do_evaluate_sample(model, sent_a, sent_b, tokenizer, args.max_seq_length, device)
         print(sent_a, sent_b)
         print(logits)
 
+        sent_a = "At a tennis court."
+        sent_b = "on a tennis court."
+        logits = do_evaluate_sample(model, sent_a, sent_b, tokenizer, args.max_seq_length, device)
+        print(sent_a, sent_b)
+        print(logits)
+
+        sent_a = "To play tennis."
+        sent_b = "playing tennis."
+        logits = do_evaluate_sample(model, sent_a, sent_b, tokenizer, args.max_seq_length, device)
+        print(sent_a, sent_b)
+        print(logits)
+
+        sent_a = "daytime."
+        sent_b = "Nighttime."
+        logits = do_evaluate_sample(model, sent_a, sent_b, tokenizer, args.max_seq_length, device)
+        print(sent_a, sent_b)
+        print(logits)
+
+        sent_a = "green."
+        sent_b = "blue."
+        logits = do_evaluate_sample(model, sent_a, sent_b, tokenizer, args.max_seq_length, device)
+        print(sent_a, sent_b)
+        print(logits)
+
+        sent_a = "winter."
+        sent_b = "fall."
+        logits = do_evaluate_sample(model, sent_a, sent_b, tokenizer, args.max_seq_length, device)
+        print(sent_a, sent_b)
+        print(logits)
 
 if __name__ == '__main__':
     main()
