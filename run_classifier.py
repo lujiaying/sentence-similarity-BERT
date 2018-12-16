@@ -546,6 +546,8 @@ def main():
     # Prepare model
     model = BertForSequenceClassification.from_pretrained(args.bert_model,
                 cache_dir=PYTORCH_PRETRAINED_BERT_CACHE / 'distributed_{}'.format(args.local_rank))
+    if args.resume_path:
+        model.load_state_dict(torch.load(args.resume_path))
     if args.fp16:
         model.half()
     model.to(device)
@@ -554,8 +556,6 @@ def main():
                                                           output_device=args.local_rank)
     elif n_gpu > 1:
         model = torch.nn.DataParallel(model)
-    if args.resume_path:
-        model.load_state_dict(torch.load(args.resume_path))
 
     # Prepare optimizer
     if args.fp16:
@@ -651,18 +651,25 @@ def main():
             val_loss, val_accuracy = do_validate(model, processor, tokenizer, device, args)
             logger.info("Epoch [%s/%s], Val Loss: %.4f, accuracy: %.4f" % (_+1, args.num_train_epochs, val_loss, val_accuracy))
             if _+1 > args.early_training_epoch_threshold and val_accuracy > max_accuracy:
-                torch.save(model.state_dict(), "%s/%s_%s_Epoch%s.ckpt" % (args.output_dir, args.task_name, args.model_suffix, _+1))
+                if n_gpu > 1:
+                    torch.save(model.module.state_dict(), "%s/%s_%s_Epoch%s.ckpt" % (args.output_dir, args.task_name, args.model_suffix, _+1))
+                else:
+                    torch.save(model.state_dict(), "%s/%s_%s_Epoch%s.ckpt" % (args.output_dir, args.task_name, args.model_suffix, _+1))
                 max_accuracy = val_accuracy
             # Early stop
             if (last_val_loss - val_loss) < args.early_stop_loss_threshold:
                 patience_cnt += 1
                 if patience_cnt >= args.early_stop_patience:
                     logger.info('Early Stopping at Epoch[%s]' % (_+1))
-                    torch.save(model.state_dict(), "%s/%s_%s_Epoch%s.ckpt" % (args.output_dir, args.task_name, args.model_suffix, _+1))
-                    exit(0)
+                    break
             else:
                 patience_cnt = 0
             last_val_loss = val_loss
+        # After epoches
+        if n_gpu > 1:
+            torch.save(model.module.state_dict(), "%s/%s_%s_Epoch%s.ckpt" % (args.output_dir, args.task_name, args.model_suffix, _+1))
+        else:
+            torch.save(model.state_dict(), "%s/%s_%s_Epoch%s.ckpt" % (args.output_dir, args.task_name, args.model_suffix, _+1))
 
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
         eval_examples = processor.get_dev_examples(args.data_dir)
@@ -722,7 +729,6 @@ def main():
         if not args.resume_path:
             print("args.resume_path should not be None")
             exit(-1)
-        model.load_state_dict(torch.load(args.resume_path))
         model.eval()
 
         sent_a = "Two."
